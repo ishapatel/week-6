@@ -173,27 +173,60 @@ def getData():
 	X = np.asarray(featureData, dtype='float')
 	y = np.asarray(targetData, dtype='float')
 
-	scaler = preprocessing.StandardScaler().fit(X)
-	X_scaled = scaler.transform(X)
+	breakpoint = int(numListings * .7)
+
+	print "length of dataset: " + str(numListings)
+	print "length of training set: " + str(breakpoint)
+	print "length of validation set: " + str(numListings-breakpoint)
+
+	X_train = X[:breakpoint]
+	X_val = X[breakpoint:]
+
+	y_train = y[:breakpoint]
+	y_val = y[breakpoint:]	
+	
+
+	scaler = preprocessing.StandardScaler().fit(X_train)
+	X_scaled = scaler.transform(X_train)
 
 	q.put("training model...")
 
-	C = 10000
-	e = 10
-	g = .01
+	mse_min = 10000000000000000000000
 
-	model = svm.SVR(C=C, epsilon=e, gamma=g, kernel='rbf', cache_size=2000)
-	model.fit(X_scaled, y)
+	for C in [.01, 1, 100, 10000, 1000000]:
+	    for e in [.01, 1, 100, 10000, 1000000]:
+	            for g in [.01, 1, 100, 10000, 1000000]:
 
+	                q.put("training model: C[" + str(C) + "], e[" + str(e) + "], g[" + str(g) + "]")
+
+	                model = svm.SVR(C=C, epsilon=e, gamma=g, kernel='rbf', cache_size=2000)
+	                model.fit(X_train_scaled, y_train)
+
+	                y_val_p = [model.predict(i) for i in X_val]
+
+	                mse = 0
+	                for i in range(len(y_val_p)):
+	                    mse += (y_val_p[i] - y_val[i]) ** 2
+	                mse /= len(y_val_p)
+
+	                if mse < mse_min:
+	                    mse_min = mse
+	                    model_best = model
+	                    C_best = C
+	                    e_best = e
+	                    g_best = g
+	
 	for j in range(numH):
 		for i in range(numW):
 			lat = remap(j, numH, 0, lat1, lat2)
 			lng = remap(i, 0, numW, lng1, lng2)
 
+		q.put("best model: C[" + str(C_best) + "], e[" + str(e_best) + "], g[" + str(g_best) + "]")
+
 			testData = [[lat, lng]]
 			X_test = np.asarray(testData, dtype='float')
 			X_test_scaled = scaler.transform(X_test)
-			grid[j][i] = model.predict(X_test_scaled)
+			grid[j][i] = model_best.predict(X_test_scaled)
 
 
 
